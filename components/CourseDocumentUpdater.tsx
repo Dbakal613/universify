@@ -27,6 +27,10 @@ function isSupportedDocument(file: File) {
   );
 }
 
+function isWordDocument(file: File) {
+  return file.type === WORD_MIME || file.name.toLowerCase().endsWith(".docx");
+}
+
 function detectedChanges(current: Course, candidate: Course) {
   const changes: string[] = [];
   const updatedRooms = candidate.classes.filter((block) => {
@@ -134,10 +138,16 @@ export default function CourseDocumentUpdater({
       );
       if (semester) formData.append("semester", semester);
 
-      const response = await fetch("/api/process-syllabus", {
-        method: "POST",
-        body: formData,
-      });
+      const containsWord = files.some(isWordDocument);
+      const response = await fetch(
+        containsWord
+          ? "/api/process-syllabus-flex"
+          : "/api/process-syllabus",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
       const result = await response.json();
 
       if (!response.ok || !result.success || result.courses?.length !== 1) {
