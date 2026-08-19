@@ -23,6 +23,19 @@ type UploadedDocument = {
   file: File;
 };
 
+const WORD_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function isSupportedDocument(file: File) {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === "application/pdf" ||
+    file.type === WORD_MIME ||
+    name.endsWith(".pdf") ||
+    name.endsWith(".docx")
+  );
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const { userId } = useAuthUser();
@@ -44,13 +57,9 @@ export default function UploadPage() {
     useState<ExtractedCourse[]>([]);
 
   function addFiles(files: File[]) {
-    const pdfFiles = files.filter(
-      (file) =>
-        file.type === "application/pdf" ||
-        file.name.toLowerCase().endsWith(".pdf")
-    );
+    const supportedFiles = files.filter(isSupportedDocument);
 
-    const newDocuments = pdfFiles.map((file) => ({
+    const newDocuments = supportedFiles.map((file) => ({
       id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
       file,
     }));
@@ -220,7 +229,7 @@ export default function UploadPage() {
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept={`.pdf,.docx,application/pdf,${WORD_MIME}`}
           multiple
           className="hidden"
           onChange={handleFileChange}
@@ -246,7 +255,7 @@ export default function UploadPage() {
           </p>
 
           <p className="mt-4 text-sm text-slate-400">
-            Puedes subir varios PDF del mismo ramo
+            Puedes subir varios PDF o Word (.docx) del mismo ramo
           </p>
         </div>
 
