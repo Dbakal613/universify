@@ -14,6 +14,19 @@ import { getUserStorageKey, USER_STORAGE_KEYS } from "../lib/user-storage";
 
 type Status = "idle" | "processing" | "ready" | "error";
 
+const WORD_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function isSupportedDocument(file: File) {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === "application/pdf" ||
+    file.type === WORD_MIME ||
+    name.endsWith(".pdf") ||
+    name.endsWith(".docx")
+  );
+}
+
 function detectedChanges(current: Course, candidate: Course) {
   const changes: string[] = [];
   const updatedRooms = candidate.classes.filter((block) => {
@@ -90,9 +103,7 @@ export default function CourseDocumentUpdater({
 
   function selectFiles(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []).filter(
-      (file) =>
-        file.type === "application/pdf" ||
-        file.name.toLowerCase().endsWith(".pdf")
+      isSupportedDocument
     );
 
     setFiles(selectedFiles);
@@ -181,14 +192,14 @@ export default function CourseDocumentUpdater({
     <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm">
       <h2 className="text-xl font-semibold">Agregar información al ramo</h2>
       <p className="mt-2 text-sm text-slate-600">
-        Sube uno o más PDF complementarios para agregar salas, horarios,
-        evaluaciones, asistencia u otras indicaciones a {course.name}.
+        Sube uno o más documentos PDF o Word (.docx) para agregar salas,
+        horarios, evaluaciones, asistencia u otras indicaciones a {course.name}.
       </p>
 
       <input
         ref={inputRef}
         type="file"
-        accept=".pdf,application/pdf"
+        accept={`.pdf,.docx,application/pdf,${WORD_MIME}`}
         multiple
         onChange={selectFiles}
         className="hidden"
@@ -201,7 +212,7 @@ export default function CourseDocumentUpdater({
           disabled={status === "processing"}
           className="rounded-xl border bg-white px-4 py-2 disabled:opacity-50"
         >
-          Seleccionar PDF
+          Seleccionar documentos
         </button>
 
         {files.length > 0 && (
