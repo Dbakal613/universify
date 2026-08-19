@@ -36,6 +36,10 @@ function isSupportedDocument(file: File) {
   );
 }
 
+function isWordDocument(file: File) {
+  return file.type === WORD_MIME || file.name.toLowerCase().endsWith(".docx");
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const { userId } = useAuthUser();
@@ -145,8 +149,14 @@ export default function UploadPage() {
       );
       if (semester) formData.append("semester", semester);
 
+      const containsWord = documents.some((document) =>
+        isWordDocument(document.file)
+      );
+
       const response = await fetch(
-        "/api/process-syllabus",
+        containsWord
+          ? "/api/process-syllabus-flex"
+          : "/api/process-syllabus",
         {
           method: "POST",
           body: formData,
