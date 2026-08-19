@@ -2,12 +2,14 @@ export type EvaluationKind =
   | "control"
   | "prueba"
   | "entrega"
+  | "presentacion"
   | "examen"
   | "actividad";
 
 export type Evaluation = {
   name: string;
   date: string;
+  time?: string;
   kind: EvaluationKind;
   detail?: string;
 };
@@ -25,10 +27,21 @@ export type ClassBlock = {
   room?: string;
 };
 
+export type ClassSession = {
+  date: string;
+  start?: string;
+  end?: string;
+  room?: string;
+  topics?: string;
+  status: "scheduled" | "cancelled";
+  note?: string;
+};
+
 export type AutonomousTask = {
   weekStart: string;
   title: string;
-  minutes: number;
+  classTopics?: string;
+  minutes?: number;
   evaluation?: string;
 };
 
@@ -43,14 +56,32 @@ export type Course = {
   attendanceNote?: string;
   color: string;
   classes: ClassBlock[];
+  classSessions: ClassSession[];
   evaluations: Evaluation[];
   gradeComponents: GradeComponent[];
   autonomousTasks: AutonomousTask[];
 };
 
+export type SemesterSettings = {
+  name: string;
+  year: number;
+  term: string;
+  startDate: string;
+  endDate: string;
+  timezone: string;
+  locationName: string;
+};
+
 export type AttendanceRecord = {
   attended: number;
   total: number;
+  sessions?: AttendanceSession[];
+};
+
+export type AttendanceSession = {
+  date: string;
+  start?: string;
+  status: "attended" | "absent" | "justified";
 };
 
 export type ProgressState = {

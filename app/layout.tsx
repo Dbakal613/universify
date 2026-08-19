@@ -2,6 +2,9 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Sidebar from "../components/Sidebar";
 import ProgressProvider from "../components/ProgressProvider";
+import AuthUserProvider from "../components/AuthUserProvider";
+import ProfileProvider from "../components/ProfileProvider";
+import InitialDataProvider from "../components/InitialDataProvider";
 
 export const metadata: Metadata = {
   title: "Universify",
@@ -16,10 +19,16 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <ProgressProvider>
-          <Sidebar />
-          {children}
-        </ProgressProvider>
+        <AuthUserProvider>
+          <InitialDataProvider>
+            <ProfileProvider>
+              <ProgressProvider>
+                <Sidebar />
+                {children}
+              </ProgressProvider>
+            </ProfileProvider>
+          </InitialDataProvider>
+        </AuthUserProvider>
       </body>
     </html>
   );

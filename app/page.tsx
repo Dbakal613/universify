@@ -2,12 +2,16 @@
 
 import AttendanceCard from "../components/AttendanceCard";
 import PageShell from "../components/PageShell";
-import { courses } from "../lib/data";
 import { daysUntil, formatDate } from "../lib/date";
+import { useSavedCourses } from "../lib/use-saved-courses";
+import { useProfile } from "../components/ProfileProvider";
 
 function urgency(days: number) {
   if (days <= 2) {
-    return { label: "Urgente", className: "bg-red-100 text-red-700" };
+    return {
+      label: "Urgente",
+      className: "bg-red-100 text-red-700",
+    };
   }
 
   if (days <= 4) {
@@ -24,70 +28,150 @@ function urgency(days: number) {
 }
 
 export default function DashboardPage() {
+  const { firstName } = useProfile();
+
+  const {
+    courses,
+    isLoading: coursesLoading,
+    error: coursesError,
+  } = useSavedCourses();
+  if (coursesLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-slate-500">
+          Cargando Universify...
+        </p>
+      </main>
+    );
+  }
+
+  if (coursesError) {
+    return (
+      <PageShell title="Universify">
+        <section role="alert" className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">No pudimos cargar tus ramos</h2>
+          <p className="mt-2 text-slate-500">{coursesError}</p>
+        </section>
+      </PageShell>
+    );
+  }
+
   const today = new Date();
 
   const nextEvaluations = courses
     .flatMap((course) =>
-      course.evaluations.map((evaluation) => ({ course, evaluation }))
+      course.evaluations.map((evaluation) => ({
+        course,
+        evaluation,
+      }))
     )
-    .filter(({ evaluation }) => daysUntil(evaluation.date) >= 0)
-    .sort((a, b) => a.evaluation.date.localeCompare(b.evaluation.date))
+    .filter(
+      ({ evaluation }) =>
+        daysUntil(evaluation.date) >= 0
+    )
+    .sort((a, b) =>
+      `${a.evaluation.date} ${a.evaluation.time ?? "23:59"}`.localeCompare(
+        `${b.evaluation.date} ${b.evaluation.time ?? "23:59"}`
+      )
+    )
     .slice(0, 4);
 
   const todayCourses = courses.filter((course) =>
-    course.classes.some((block) => block.day === today.getDay())
+    course.classes.some(
+      (block) => block.day === today.getDay()
+    )
+  );
+
+  const coursesWithoutFutureEvaluations = courses.filter(
+    (course) =>
+      !course.evaluations.some((evaluation) => daysUntil(evaluation.date) >= 0)
   );
 
   return (
     <PageShell
-      title="Qué estudiar hoy"
+      title={firstName ? `Hola, ${firstName}` : "Qué estudiar hoy"}
       description="Las cuatro evaluaciones futuras más próximas y la asistencia de tus clases de hoy."
     >
       <section className="grid gap-4 md:grid-cols-2">
-        {nextEvaluations.map(({ course, evaluation }, index) => {
-          const remaining = daysUntil(evaluation.date);
-          const state = urgency(remaining);
+        {nextEvaluations.length === 0 ? (
+          <div className="rounded-3xl bg-white p-6 shadow-sm md:col-span-2">
+            <p className="text-slate-500">
+              No tienes evaluaciones futuras registradas.
+            </p>
+          </div>
+        ) : (
+          nextEvaluations.map(
+            ({ course, evaluation }, index) => {
+              const remaining = daysUntil(
+                evaluation.date
+              );
 
-          return (
-            <article
-              key={`${course.id}-${evaluation.name}`}
-              className="rounded-3xl bg-white p-6 shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-sm text-slate-500">
-                  Prioridad {index + 1}
-                </p>
+              const state = urgency(remaining);
 
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${state.className}`}
+              return (
+                <article
+                  key={`${course.id}-${evaluation.name}-${evaluation.date}`}
+                  className="rounded-3xl bg-white p-6 shadow-sm"
                 >
-                  {state.label}
-                </span>
-              </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-sm text-slate-500">
+                      Prioridad {index + 1}
+                    </p>
 
-              <h2 className="mt-3 text-xl font-semibold">{course.name}</h2>
-              <p className="mt-2 font-medium">{evaluation.name}</p>
-              <p className="mt-1 text-sm text-slate-500">
-                {remaining === 0
-                  ? "Es hoy"
-                  : remaining === 1
-                  ? "Queda 1 día"
-                  : `Quedan ${remaining} días`}
-                {" · "}
-                {formatDate(evaluation.date)}
-              </p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${state.className}`}
+                    >
+                      {state.label}
+                    </span>
+                  </div>
 
-              <p className="mt-4 text-sm text-slate-700">
-                {evaluation.detail ??
-                  "Comenzar preparación y revisar los contenidos asociados."}
-              </p>
-            </article>
-          );
-        })}
+                  <h2 className="mt-3 text-xl font-semibold">
+                    {course.name}
+                  </h2>
+
+                  <p className="mt-2 font-medium">
+                    {evaluation.name}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    {remaining === 0
+                      ? "Hoy"
+                      : remaining === 1
+                        ? "Queda 1 día"
+                        : `Quedan ${remaining} días`}
+                    {" · "}
+                    {formatDate(evaluation.date)}
+                    {evaluation.time ? ` · ${evaluation.time}` : ""}
+                  </p>
+
+                  <p className="mt-4 text-sm text-slate-700">
+                    {evaluation.detail ??
+                      "Comenzar preparación y revisar los contenidos asociados."}
+                  </p>
+                </article>
+              );
+            }
+          )
+        )}
       </section>
 
+      {coursesWithoutFutureEvaluations.length > 0 && (
+        <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">Ramos sin evaluaciones futuras</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {coursesWithoutFutureEvaluations.map((course) => (
+              <span key={course.id} className={`rounded-full px-3 py-2 text-sm ${course.color}`}>
+                {course.name}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mt-8">
-        <h2 className="text-2xl font-semibold">Clases de hoy</h2>
+        <h2 className="text-2xl font-semibold">
+          Clases de hoy
+        </h2>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {todayCourses.length === 0 ? (
@@ -96,7 +180,11 @@ export default function DashboardPage() {
             </p>
           ) : (
             todayCourses.map((course) => (
-              <AttendanceCard key={course.id} course={course} />
+              <AttendanceCard
+                key={course.id}
+                course={course}
+                compact
+              />
             ))
           )}
         </div>

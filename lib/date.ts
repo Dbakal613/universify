@@ -9,15 +9,23 @@ export const DAY_NAMES = [
 ];
 
 export function dateOnly(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 export function daysUntil(date: string, from = new Date()) {
-  const start = new Date(from);
-  start.setHours(0, 0, 0, 0);
+  const [year, month, day] = date.split("-").map(Number);
+  const start = Date.UTC(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate()
+  );
+  const target = Date.UTC(year, month - 1, day);
 
-  const target = new Date(`${date}T12:00:00`);
-  return Math.ceil((target.getTime() - start.getTime()) / 86_400_000);
+  return Math.round((target - start) / 86_400_000);
 }
 
 export function formatDate(date: string) {
@@ -49,4 +57,25 @@ export function minutesToTime(total: number) {
   const minutes = total % 60;
 
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function countScheduledClasses(
+  classes: { day: number }[],
+  startDate: string,
+  endDate: string
+) {
+  const start = new Date(`${startDate}T12:00:00`);
+  const end = new Date(`${endDate}T12:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+
+  let total = 0;
+  const current = new Date(start);
+
+  while (current <= end) {
+    total += classes.filter((block) => block.day === current.getDay()).length;
+    current.setDate(current.getDate() + 1);
+  }
+
+  return total;
 }

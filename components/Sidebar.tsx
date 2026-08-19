@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef, type MouseEvent } from "react";
+
+import { logout } from "@/app/auth-actions";
 
 const items = [
   { href: "/", label: "Hoy" },
@@ -13,6 +16,22 @@ const items = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const logoutButtonRef = useRef<HTMLButtonElement>(null);
+
+  function openLogoutDialog() {
+    dialogRef.current?.showModal();
+  }
+
+  function closeLogoutDialog() {
+    dialogRef.current?.close();
+  }
+
+  function closeOnBackdrop(event: MouseEvent<HTMLDialogElement>) {
+    if (event.target === event.currentTarget) {
+      closeLogoutDialog();
+    }
+  }
 
   return (
     <>
@@ -44,10 +63,63 @@ export default function Sidebar() {
               </Link>
             );
           })}
+
+          <button
+            ref={logoutButtonRef}
+            type="button"
+            onClick={openLogoutDialog}
+            className="block w-full whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            Cerrar sesión
+          </button>
         </nav>
       </aside>
 
       <div className="h-16 md:hidden" />
+
+      <dialog
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="logout-dialog-title"
+        aria-describedby="logout-dialog-description"
+        onClick={closeOnBackdrop}
+        onClose={() => logoutButtonRef.current?.focus()}
+        className="fixed inset-0 z-[100] m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl bg-white p-0 text-slate-950 shadow-xl backdrop:bg-slate-950/35"
+      >
+        <div className="p-6">
+          <h2 id="logout-dialog-title" className="text-xl font-semibold">
+            ¿Seguro que quieres cerrar sesión?
+          </h2>
+
+          <p
+            id="logout-dialog-description"
+            className="mt-2 text-sm leading-6 text-slate-600"
+          >
+            Podrás volver a iniciar sesión cuando quieras.
+          </p>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              autoFocus
+              onClick={closeLogoutDialog}
+              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Cerrar sesión
+              </button>
+            </form>
+          </div>
+        </div>
+      </dialog>
     </>
   );
 }
