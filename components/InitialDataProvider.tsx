@@ -156,6 +156,40 @@ export default function InitialDataProvider({ children }: { children: ReactNode 
           if (!active) return;
 
           if (!result.success) {
+            if (
+              "code" in result &&
+              result.code === "NO_ACTIVE_SEMESTER"
+            ) {
+              const onboardingKey = getUserStorageKey(
+                userId,
+                USER_STORAGE_KEYS.onboardingCompleted
+              );
+              const semesterIdKey = getUserStorageKey(
+                userId,
+                USER_STORAGE_KEYS.semesterId
+              );
+              const mappingKey = getUserStorageKey(
+                userId,
+                USER_STORAGE_KEYS.courseIdMap
+              );
+
+              localStorage.removeItem(onboardingKey);
+              localStorage.removeItem(semesterIdKey);
+              sessionStorage.removeItem(semesterIdKey);
+              localStorage.removeItem(mappingKey);
+              sessionStorage.removeItem(mappingKey);
+
+              setData({
+                courses: [],
+                semester: null,
+                onboardingCompleted: false,
+                status: "success",
+                error: null,
+                loadedUserId: userId,
+              });
+              return;
+            }
+
             setData({
               courses: [],
               semester: localSemester,
