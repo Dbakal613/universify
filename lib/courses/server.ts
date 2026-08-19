@@ -27,6 +27,12 @@ type CourseRow = {
   course_data: unknown;
 };
 
+type CourseLoadError = {
+  success: false;
+  error: string;
+  code?: "NO_ACTIVE_SEMESTER";
+};
+
 export type LoadMyCoursesResult =
   | {
       success: true;
@@ -34,7 +40,7 @@ export type LoadMyCoursesResult =
       courses: Course[];
       mappings: CourseIdMapping[];
     }
-  | { success: false; error: string };
+  | CourseLoadError;
 
 export type SaveMyCoursesResult =
   | { success: true; courses: CourseIdMapping[] }
@@ -144,7 +150,11 @@ async function authenticatedActiveSemester() {
   }
 
   if (!semester) {
-    return { success: false as const, error: "No encontramos un semestre activo." };
+    return {
+      success: false as const,
+      code: "NO_ACTIVE_SEMESTER" as const,
+      error: "No encontramos un semestre activo.",
+    };
   }
 
   return { success: true as const, supabase, semester };
