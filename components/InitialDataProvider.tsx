@@ -201,6 +201,18 @@ export default function InitialDataProvider({ children }: { children: ReactNode 
             return;
           }
 
+          if (result.state === "needs_onboarding") {
+            setData({
+              courses: [],
+              semester: null,
+              onboardingCompleted: false,
+              status: "success",
+              error: null,
+              loadedUserId: userId,
+            });
+            return;
+          }
+
           const semester = result.semester.settings;
           const courses = result.courses;
           const onboardingCompleted = locallyCompleted || courses.length > 0;
@@ -267,9 +279,11 @@ export default function InitialDataProvider({ children }: { children: ReactNode 
       !data.onboardingCompleted &&
       !pathname.startsWith("/onboarding/")
     ) {
-      router.replace("/onboarding/semester");
+      router.replace(
+        data.semester ? "/onboarding/upload" : "/onboarding/semester"
+      );
     }
-  }, [data.onboardingCompleted, pathname, router, status, userId]);
+  }, [data.onboardingCompleted, data.semester, pathname, router, status, userId]);
 
   async function saveCourses(nextCourses: Course[]) {
     if (!userId || status !== "success") {

@@ -27,20 +27,22 @@ type CourseRow = {
   course_data: unknown;
 };
 
-type CourseLoadError = {
-  success: false;
-  error: string;
-  code?: "NO_ACTIVE_SEMESTER";
-};
-
 export type LoadMyCoursesResult =
   | {
       success: true;
+      state: "ready";
       semester: ActiveSemester;
       courses: Course[];
       mappings: CourseIdMapping[];
     }
-  | CourseLoadError;
+  | {
+      success: true;
+      state: "needs_onboarding";
+      semester: null;
+      courses: [];
+      mappings: [];
+    }
+  | { success: false; error: string };
 
 export type SaveMyCoursesResult =
   | { success: true; courses: CourseIdMapping[] }
@@ -150,14 +152,10 @@ async function authenticatedActiveSemester() {
   }
 
   if (!semester) {
-    return {
-      success: false as const,
-      code: "NO_ACTIVE_SEMESTER" as const,
-      error: "No encontramos un semestre activo.",
-    };
+    return { success: true as const, state: "needs_onboarding" as const };
   }
 
-  return { success: true as const, supabase, semester };
+  return { success: true as const, state: "ready" as const, supabase, semester };
 }
 
 const courseSelection =
@@ -168,6 +166,15 @@ export async function loadAuthenticatedCourses(
 ): Promise<LoadMyCoursesResult> {
   const context = await authenticatedActiveSemester();
   if (!context.success) return context;
+  if (context.state === "needs_onboarding") {
+    return {
+      success: true,
+      state: "needs_onboarding",
+      semester: null,
+      courses: [],
+      mappings: [],
+    };
+  }
 
   const safeLocalCourses = validatedCourses(localCourses) ?? [];
   const { supabase, semester } = context;
@@ -224,6 +231,7 @@ export async function loadAuthenticatedCourses(
   const finalRows = (remoteRows ?? []) as CourseRow[];
   return {
     success: true,
+    state: "ready",
     semester: {
       id: semester.id,
       settings: {
@@ -254,6 +262,12 @@ export async function saveAuthenticatedCourses(
 
   const context = await authenticatedActiveSemester();
   if (!context.success) return context;
+  if (context.state === "needs_onboarding") {
+    return {
+      success: false,
+      error: "Configura tu semestre antes de guardar ramos.",
+    };
+  }
 
   const { data, error } = await context.supabase
     .from("courses")
@@ -284,6 +298,12 @@ export async function deleteAuthenticatedCourse(legacyId: string) {
 
   const context = await authenticatedActiveSemester();
   if (!context.success) return context;
+  if (context.state === "needs_onboarding") {
+    return {
+      success: false as const,
+      error: "Configura tu semestre antes de eliminar ramos.",
+    };
+  }
 
   const { error } = await context.supabase
     .from("courses")
