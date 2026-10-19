@@ -195,14 +195,18 @@ async function syncGradeComponents(supabase: SupabaseClient, course: Course) {
     })
   );
 
-  for (const component of course.gradeComponents) {
+  for (const [position, component] of course.gradeComponents.entries()) {
     const legacyKey = gradeComponentKey(component);
+    const componentKind = gradeComponentKind(component);
     const values = {
       course_id: course.remoteId,
+      legacy_key: legacyKey,
       name: component.name.trim(),
       weight: component.weight,
-      component_type: `universify:${legacyKey}:${gradeComponentKind(component)}`,
-      is_expandable: gradeComponentKind(component) === "grouped",
+      component_type: `universify:${legacyKey}:${componentKind}`,
+      component_kind: componentKind,
+      is_expandable: componentKind === "grouped",
+      position,
     };
     const existingId = existingByKey.get(legacyKey);
     const mutation = existingId
