@@ -1,5 +1,24 @@
 begin;
 
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'course_class_sessions'
+      and column_name = 'class_date'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'course_class_sessions'
+      and column_name = 'session_date'
+  ) then
+    alter table public.course_class_sessions
+    rename column class_date to session_date;
+  end if;
+end
+$$;
+
 alter table public.course_class_sessions
 add column if not exists updated_at timestamptz not null default now();
 
