@@ -97,10 +97,15 @@ create table public.evaluations (
 create table public.grade_components (
   id uuid primary key default gen_random_uuid(),
   course_id uuid not null references public.courses(id) on delete cascade,
+  legacy_key text not null,
   name text not null,
   weight numeric,
   component_type text,
+  component_kind text not null default 'individual' check (
+    component_kind in ('individual', 'grouped')
+  ),
   is_expandable boolean not null default false,
+  position integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -185,8 +190,11 @@ create table public.grade_entries (
   course_id uuid not null references public.courses(id) on delete cascade,
   evaluation_id uuid references public.evaluations(id) on delete cascade,
   grade_component_id uuid references public.grade_components(id) on delete cascade,
+  client_id uuid not null default gen_random_uuid(),
   label text not null,
   grade numeric check (grade between 1 and 7),
+  evaluation_date date,
+  position integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -435,12 +443,44 @@ with check (
   )
 );
 
-create policy "grades own data"
+create policy "grades through own course and component"
 on public.grade_entries
 for all
 to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
+using (
+  user_id = (select auth.uid())
+  and exists (
+    select 1 from public.courses
+    join public.semesters on semesters.id = courses.semester_id
+    where courses.id = grade_entries.course_id
+      and semesters.user_id = (select auth.uid())
+  )
+  and (
+    grade_component_id is null
+    or exists (
+      select 1 from public.grade_components
+      where grade_components.id = grade_entries.grade_component_id
+        and grade_components.course_id = grade_entries.course_id
+    )
+  )
+)
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1 from public.courses
+    join public.semesters on semesters.id = courses.semester_id
+    where courses.id = grade_entries.course_id
+      and semesters.user_id = (select auth.uid())
+  )
+  and (
+    grade_component_id is null
+    or exists (
+      select 1 from public.grade_components
+      where grade_components.id = grade_entries.grade_component_id
+        and grade_components.course_id = grade_entries.course_id
+    )
+  )
+);
 
 create policy "study sessions own data"
 on public.study_sessions
@@ -489,11 +529,20 @@ create unique index attendance_records_session_identity_idx
 on public.attendance_records(user_id, course_class_session_id)
 where course_class_session_id is not null;
 
+create unique index attendance_records_user_session_unique_idx
+on public.attendance_records(user_id, course_class_session_id);
+
 create index attendance_records_session_id_idx
 on public.attendance_records(course_class_session_id);
 
 create index grade_entries_user_course_idx
 on public.grade_entries(user_id, course_id);
+
+create unique index grade_components_course_legacy_key_idx
+on public.grade_components(course_id, legacy_key);
+
+create unique index grade_entries_user_component_client_idx
+on public.grade_entries(user_id, grade_component_id, client_id);
 
 create index study_sessions_user_date_idx
 on public.study_sessions(user_id, scheduled_date);

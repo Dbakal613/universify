@@ -15,10 +15,23 @@ export type Evaluation = {
 };
 
 export type GradeComponent = {
+  id?: string;
+  key?: string;
   name: string;
   weight: number;
+  kind?: "individual" | "grouped";
   expandable?: "economia-controls" | "estadistica-pruebas" | "estadistica-controles" | "activities";
 };
+
+export type GradeItem = {
+  id: string;
+  remoteId?: string;
+  name: string;
+  grade?: number;
+  date?: string;
+};
+
+export type CourseGradeItems = Record<string, GradeItem[]>;
 
 export type ClassBlock = {
   day: number;
@@ -28,6 +41,7 @@ export type ClassBlock = {
 };
 
 export type ClassSession = {
+  id?: string;
   date: string;
   start?: string;
   end?: string;
@@ -47,6 +61,7 @@ export type AutonomousTask = {
 
 export type Course = {
   id: string;
+  remoteId?: string;
   name: string;
   professor: string;
   email: string;
@@ -79,6 +94,7 @@ export type AttendanceRecord = {
 };
 
 export type AttendanceSession = {
+  sessionId?: string;
   date: string;
   start?: string;
   status: "attended" | "absent" | "justified";
@@ -87,6 +103,7 @@ export type AttendanceSession = {
 export type ProgressState = {
   attendance: Record<string, AttendanceRecord>;
   grades: Record<string, Record<string, string>>;
+  gradeItems: Record<string, CourseGradeItems>;
   customActivities: Record<string, string[]>;
   targets: Record<string, number>;
 };

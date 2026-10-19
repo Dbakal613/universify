@@ -12,6 +12,7 @@ function normalizeCourse(value: unknown): Course | null {
 
   return {
     id: course.id,
+    remoteId: typeof course.remoteId === "string" ? course.remoteId : undefined,
     name: course.name,
     professor: typeof course.professor === "string" ? course.professor : "",
     email: typeof course.email === "string" ? course.email : "",

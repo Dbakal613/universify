@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   setSessionAttendance,
-  syncCourseClassSessions,
-  type RemoteClassSession,
   type SessionAttendanceStatus,
 } from "@/app/attendance-actions";
 import {
   attendanceRecordForClassSession,
   calculateAttendanceSummary,
 } from "@/lib/attendance";
-import { dateOnly } from "@/lib/date";
+import { dateInTimeZone } from "@/lib/date";
+import { displaySessionTime } from "@/lib/class-sessions";
 import type { AttendanceSession, ClassSession, Course } from "@/lib/types";
-import { getUserStorageKey, USER_STORAGE_KEYS } from "@/lib/user-storage";
-import { useAuthUser } from "./AuthUserProvider";
+import { useInitialData } from "./InitialDataProvider";
 import { useProgress } from "./ProgressProvider";
 
 const statusOptions: {
@@ -35,13 +33,13 @@ const statusOptions: {
   },
   {
     value: "justified",
-    label: "Inasistencia justificada",
+    label: "Justificada",
     activeClass: "border-blue-700 bg-blue-700",
   },
 ];
 
 function classSessionKey(session: ClassSession, index: number) {
-  return `${session.date}|${session.start ?? ""}|${index}`;
+  return session.id ?? `${session.date}|${session.start ?? ""}|${index}`;
 }
 
 function sessionDateLabel(session: ClassSession, includeYear = false) {
@@ -52,7 +50,7 @@ function sessionDateLabel(session: ClassSession, includeYear = false) {
     ...(includeYear ? { year: "numeric" } : {}),
   }).format(new Date(`${session.date}T12:00:00`));
 
-  return `${date}${session.start ? ` · ${session.start}` : ""}`;
+  return `${date}${session.start ? ` · ${displaySessionTime(session.start)}` : ""}`;
 }
 
 function historyStatus(
@@ -73,7 +71,7 @@ function historyStatus(
   }
   if (attendance?.status === "justified") {
     return {
-      label: "Inasistencia justificada",
+      label: "Justificada",
       symbol: "✓",
       className: "text-blue-700",
     };
@@ -89,16 +87,13 @@ export default function AttendanceCard({
   course: Course;
   compact?: boolean;
 }) {
-  const { userId } = useAuthUser();
-  const { attendance, setAttendance } = useProgress();
+  const { semester } = useInitialData();
+  const { attendance, setAttendance, attendanceStatus, attendanceError } = useProgress();
   const record = attendance[course.id];
-  const today = dateOnly(new Date());
+  const today = dateInTimeZone(semester?.timezone ?? "America/Santiago");
   const summary = calculateAttendanceSummary(course, record, today);
-  const [remoteSessions, setRemoteSessions] = useState<RemoteClassSession[]>([]);
   const [syncMessage, setSyncMessage] = useState("");
-  const todayBlock = course.classes.find(
-    (block) => block.day === new Date().getDay()
-  );
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
   const selectableSessions = course.classSessions
     .map((session, index) => ({
@@ -117,33 +112,16 @@ export default function AttendanceCard({
   const [selectedKey, setSelectedKey] = useState(
     () => selectableSessions[0]?.key ?? ""
   );
-  const selected = selectableSessions.find((item) => item.key === selectedKey);
+  const selected = selectableSessions.find((item) => item.key === selectedKey) ?? selectableSessions[0];
   const selectedStatus = selected
     ? attendanceRecordForClassSession(course, record, selected.session)?.status
     : undefined;
   const savedTodaySession = course.classSessions.find(
-    (session) => session.date === today && session.status !== "cancelled"
+    (session) => session.date === today && session.status === "scheduled"
   );
   const compactSession = savedTodaySession
-    ? {
-        session: savedTodaySession,
-        key: classSessionKey(
-          savedTodaySession,
-          course.classSessions.indexOf(savedTodaySession)
-        ),
-      }
-    : todayBlock
-      ? {
-          session: {
-            date: today,
-            start: todayBlock.start,
-            end: todayBlock.end,
-            room: todayBlock.room,
-            status: "scheduled" as const,
-          },
-          key: `${today}|${todayBlock.start}|today`,
-        }
-      : undefined;
+    ? { session: savedTodaySession, key: classSessionKey(savedTodaySession, 0) }
+    : undefined;
   const compactStatus = compactSession
     ? attendanceRecordForClassSession(course, record, compactSession.session)?.status
     : undefined;
@@ -154,63 +132,18 @@ export default function AttendanceCard({
       `${b.date} ${b.start ?? ""}`.localeCompare(`${a.date} ${a.start ?? ""}`)
     );
 
-  useEffect(() => {
-    if (!userId) return;
-
-    const hasSavedTodaySession = course.classSessions.some(
-      (session) => session.date === today && session.status !== "cancelled"
-    );
-    const sessionsToSync =
-      compact && todayBlock && !hasSavedTodaySession
-        ? [
-            ...course.classSessions,
-            {
-              date: today,
-              start: todayBlock.start,
-              end: todayBlock.end,
-              room: todayBlock.room,
-              status: "scheduled" as const,
-            },
-          ]
-        : course.classSessions;
-
-    if (sessionsToSync.length === 0) return;
-
-    const mapKey = getUserStorageKey(userId, USER_STORAGE_KEYS.courseIdMap);
-    const rawMap = localStorage.getItem(mapKey) ?? sessionStorage.getItem(mapKey);
-    if (!rawMap) return;
-
-    let remoteCourseId: string | undefined;
-    try {
-      remoteCourseId = (JSON.parse(rawMap) as Record<string, string>)[course.id];
-    } catch {
-      return;
-    }
-    if (!remoteCourseId) return;
-
-    let active = true;
-    void syncCourseClassSessions(remoteCourseId, sessionsToSync).then((result) => {
-      if (!active) return;
-      if (result.success) {
-        setRemoteSessions(result.sessions);
-        setSyncMessage("");
-      } else {
-        setSyncMessage("La asistencia seguirá guardándose localmente por ahora.");
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [compact, course.classSessions, course.id, today, todayBlock, userId]);
-
-  function register(
+  async function register(
     status: AttendanceSession["status"],
     target = selected
   ) {
-    if (!target) return;
+    if (!target?.session.id || !course.remoteId || pendingSessionId) return;
 
     const { session } = target;
+    const sessionId = session.id!;
+    const remoteCourseId = course.remoteId!;
+    const previousRecord = record;
+    setPendingSessionId(sessionId);
+    setSyncMessage("");
     setAttendance((previous) => {
       const previousRecord = previous[course.id] ?? { attended: 0, total: 0 };
       const previousSessions = previousRecord.sessions ?? [];
@@ -226,7 +159,7 @@ export default function AttendanceCard({
                 (!item.start && sessionsOnDate.length === 1))
             )
         ),
-        { date: session.date, start: session.start, status },
+        { sessionId, date: session.date, start: session.start, status },
       ].sort((a, b) =>
         `${a.date} ${a.start ?? ""}`.localeCompare(`${b.date} ${b.start ?? ""}`)
       );
@@ -251,23 +184,21 @@ export default function AttendanceCard({
       };
     });
 
-    const remoteSession = remoteSessions.find(
-      (item) =>
-        item.date === session.date &&
-        (item.start?.slice(0, 5) ?? null) === (session.start ?? null)
-    );
-
-    if (remoteSession) {
-      void setSessionAttendance({
-        courseId: remoteSession.courseId,
-        sessionId: remoteSession.id,
-        status: status as SessionAttendanceStatus,
-      }).then((result) => {
-        setSyncMessage(
-          result.success ? "" : "La marca quedó guardada localmente, pero no se pudo sincronizar."
-        );
+    const result = await setSessionAttendance({
+      courseId: remoteCourseId,
+      sessionId,
+      status: status as SessionAttendanceStatus,
+    });
+    if (!result.success) {
+      setAttendance((previous) => {
+        const next = { ...previous };
+        if (previousRecord) next[course.id] = previousRecord;
+        else delete next[course.id];
+        return next;
       });
+      setSyncMessage(result.error);
     }
+    setPendingSessionId(null);
   }
 
   const progressLabel = summary.total
@@ -281,16 +212,17 @@ export default function AttendanceCard({
     return (
       <article className={`rounded-3xl p-5 ${course.color}`}>
         <h3 className="font-semibold">{course.name}</h3>
-        {todayBlock && (
+        {compactSession && (
           <p className="mt-1 text-sm">
-            {todayBlock.start}–{todayBlock.end}
-            {todayBlock.room ? ` · ${todayBlock.room}` : ""}
+            {displaySessionTime(compactSession.session.start)}
+            {compactSession.session.end ? `–${displaySessionTime(compactSession.session.end)}` : ""}
+            {compactSession.session.room ? ` · ${compactSession.session.room}` : ""}
           </p>
         )}
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80">
           <div
             className="h-full rounded-full bg-slate-950"
-            style={{ width: `${summary.percentage ?? 0}%` }}
+            style={{ width: `${semesterProgress ?? 0}%` }}
           />
         </div>
         <p className="mt-2 text-sm font-medium">{progressLabel}</p>
@@ -298,7 +230,7 @@ export default function AttendanceCard({
           Asistencia: {summary.percentage === null ? "Sin registros" : `${summary.percentage.toFixed(1)}%`}
         </p>
         {compactSession && (
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             {statusOptions.map((option) => {
               const active = compactStatus === option.value;
 
@@ -307,9 +239,10 @@ export default function AttendanceCard({
                   key={option.value}
                   type="button"
                   aria-pressed={active}
+                  disabled={pendingSessionId !== null || attendanceStatus === "loading"}
                   onClick={() => register(option.value, compactSession)}
                   style={active ? { color: "#ffffff" } : undefined}
-                  className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 ${
+                  className={`h-9 rounded-[10px] border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                     active
                       ? option.activeClass
                       : "border-white/80 bg-white/80 text-slate-700 hover:bg-white"
@@ -322,8 +255,8 @@ export default function AttendanceCard({
             })}
           </div>
         )}
-        {syncMessage && (
-          <p className="mt-3 text-xs text-amber-800">{syncMessage}</p>
+        {(syncMessage || attendanceStatus === "error") && (
+          <p className="mt-3 text-xs text-amber-800">{syncMessage || attendanceError}</p>
         )}
       </article>
     );
@@ -401,9 +334,10 @@ export default function AttendanceCard({
                     key={option.value}
                     type="button"
                     aria-pressed={active}
+                    disabled={pendingSessionId !== null || attendanceStatus === "loading"}
                     onClick={() => register(option.value)}
                     style={active ? { color: "#ffffff" } : undefined}
-                    className={`min-h-11 rounded-xl border px-3 py-2.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 ${
+                    className={`h-10 rounded-xl border px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                       active
                         ? option.activeClass
                         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
@@ -418,8 +352,8 @@ export default function AttendanceCard({
         )}
       </div>
 
-      {syncMessage && (
-        <p className="mt-3 text-sm text-amber-700">{syncMessage}</p>
+      {(syncMessage || attendanceStatus === "error") && (
+        <p className="mt-3 text-sm text-amber-700">{syncMessage || attendanceError}</p>
       )}
 
       <div className="mt-7">

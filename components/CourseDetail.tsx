@@ -8,6 +8,7 @@ import GradeBook from "./GradeBook";
 import PageShell from "./PageShell";
 import { useProgress } from "./ProgressProvider";
 import { calculateAttendanceSummary } from "../lib/attendance";
+import { calculateCourseGradeSummary } from "../lib/grades";
 import {
   courseScheduleSummary,
   nextCourseEvaluation,
@@ -42,21 +43,6 @@ function evaluationKindLabel(kind: Evaluation["kind"]) {
   return labels[kind];
 }
 
-function currentGradeAverage(course: Course, grades: ReturnType<typeof useProgress>["grades"]) {
-  let enteredWeight = 0;
-  let contribution = 0;
-
-  course.gradeComponents.forEach((component) => {
-    const value = Number(grades[course.id]?.[component.name] ?? "");
-    if (Number.isFinite(value) && value >= 1 && value <= 7) {
-      enteredWeight += component.weight;
-      contribution += value * (component.weight / 100);
-    }
-  });
-
-  return enteredWeight > 0 ? contribution / (enteredWeight / 100) : null;
-}
-
 export default function CourseDetail({
   courseId,
   requestedTab,
@@ -65,7 +51,7 @@ export default function CourseDetail({
   requestedTab: string;
 }) {
   const { courses, isLoading, error, replaceCourse } = useSavedCourses();
-  const { attendance, grades } = useProgress();
+  const { attendance, gradeItems } = useProgress();
   const course = courses.find((item) => item.id === courseId);
   const activeTab: CourseTab = isCourseTab(requestedTab)
     ? requestedTab
@@ -109,7 +95,10 @@ export default function CourseDetail({
     course,
     attendance[course.id]
   ).percentage;
-  const gradeAverage = currentGradeAverage(course, grades);
+  const gradeAverage = calculateCourseGradeSummary(
+    course,
+    gradeItems[course.id]
+  ).currentAverage;
   const evaluations = splitEvaluations(course.evaluations);
 
   return (
@@ -219,7 +208,7 @@ export default function CourseDetail({
           )}
           {activeTab === "notas" && (
             <div>
-              {Object.keys(grades[course.id] ?? {}).length === 0 && (
+              {Object.values(gradeItems[course.id] ?? {}).every((items) => items.length === 0) && (
                 <p className="mb-4 rounded-2xl bg-white p-5 text-sm text-slate-500 shadow-sm">
                   Todavía no has registrado notas.
                 </p>

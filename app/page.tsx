@@ -2,9 +2,10 @@
 
 import AttendanceCard from "../components/AttendanceCard";
 import PageShell from "../components/PageShell";
-import { daysUntil, formatDate } from "../lib/date";
+import { dateInTimeZone, daysUntil, formatDate } from "../lib/date";
 import { useSavedCourses } from "../lib/use-saved-courses";
 import { useProfile } from "../components/ProfileProvider";
+import { useInitialData } from "../components/InitialDataProvider";
 
 function urgency(days: number) {
   if (days <= 2) {
@@ -29,6 +30,7 @@ function urgency(days: number) {
 
 export default function DashboardPage() {
   const { firstName } = useProfile();
+  const { semester } = useInitialData();
 
   const {
     courses,
@@ -56,7 +58,7 @@ export default function DashboardPage() {
     );
   }
 
-  const today = new Date();
+  const today = dateInTimeZone(semester?.timezone ?? "America/Santiago");
 
   const nextEvaluations = courses
     .flatMap((course) =>
@@ -76,11 +78,21 @@ export default function DashboardPage() {
     )
     .slice(0, 4);
 
-  const todayCourses = courses.filter((course) =>
-    course.classes.some(
-      (block) => block.day === today.getDay()
+  const todayCourses = courses
+    .filter((course) =>
+      course.classSessions.some(
+        (session) => session.date === today && session.status === "scheduled"
+      )
     )
-  );
+    .sort((left, right) => {
+      const leftStart = left.classSessions.find(
+        (session) => session.date === today && session.status === "scheduled"
+      )?.start ?? "23:59";
+      const rightStart = right.classSessions.find(
+        (session) => session.date === today && session.status === "scheduled"
+      )?.start ?? "23:59";
+      return leftStart.localeCompare(rightStart);
+    });
 
   const coursesWithoutFutureEvaluations = courses.filter(
     (course) =>

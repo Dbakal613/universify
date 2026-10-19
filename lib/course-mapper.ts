@@ -1,4 +1,6 @@
 import type { ExtractedCourse } from "./ai/course-schema";
+import { normalizeClassSessions, scheduledSessionCount } from "./class-sessions";
+import { gradeComponentKey, gradeComponentKind } from "./grades";
 import type { Course, EvaluationKind } from "./types";
 
 const courseColors = [
@@ -87,6 +89,7 @@ export function mergeCourseSupplement(
       };
     }
   });
+  const canonicalClassSessions = normalizeClassSessions(classSessions);
 
   const evaluations = [...current.evaluations];
 
@@ -152,12 +155,14 @@ export function mergeCourseSupplement(
     email: supplement.email || current.email,
     autonomousHours:
       supplement.autonomousHours || current.autonomousHours,
-    totalClasses: supplement.totalClasses || current.totalClasses,
+    totalClasses: canonicalClassSessions.length > 0
+      ? scheduledSessionCount(canonicalClassSessions)
+      : supplement.totalClasses || current.totalClasses,
     attendanceRequired:
       supplement.attendanceRequired ?? current.attendanceRequired,
     attendanceNote: supplement.attendanceNote ?? current.attendanceNote,
     classes,
-    classSessions,
+    classSessions: canonicalClassSessions,
     evaluations,
     gradeComponents,
     autonomousTasks,
@@ -168,6 +173,18 @@ export function extractedCourseToCourse(
   extracted: ExtractedCourse,
   colorIndex = 0
 ): Course {
+  const classSessions = normalizeClassSessions(
+    extracted.classSessions.map((session) => ({
+      date: normalizeEvaluationDate(session.date),
+      start: session.start ?? undefined,
+      end: session.end ?? undefined,
+      room: session.room ?? undefined,
+      topics: session.topics ?? undefined,
+      status: session.status,
+      note: session.note ?? undefined,
+    }))
+  );
+
   return {
     id: createCourseId(extracted.name),
 
@@ -179,9 +196,9 @@ export function extractedCourseToCourse(
 
     autonomousHours: extracted.autonomousHours ?? 0,
 
-    totalClasses:
-      extracted.attendance.totalClasses ??
-      extracted.classSessions.filter((session) => session.status === "scheduled").length,
+    totalClasses: classSessions.length > 0
+      ? scheduledSessionCount(classSessions)
+      : extracted.attendance.totalClasses ?? 0,
 
     attendanceRequired:
       extracted.attendance.requiredPercentage ?? undefined,
@@ -198,15 +215,7 @@ export function extractedCourseToCourse(
       room: classBlock.room ?? undefined,
     })),
 
-    classSessions: extracted.classSessions.map((session) => ({
-      date: normalizeEvaluationDate(session.date),
-      start: session.start ?? undefined,
-      end: session.end ?? undefined,
-      room: session.room ?? undefined,
-      topics: session.topics ?? undefined,
-      status: session.status,
-      note: session.note ?? undefined,
-    })),
+    classSessions,
 
     evaluations: extracted.evaluations
       .filter(
@@ -233,8 +242,10 @@ export function extractedCourseToCourse(
         } => component.weight !== null
       )
       .map((component) => ({
+        key: gradeComponentKey({ name: component.name, weight: component.weight }),
         name: component.name,
         weight: component.weight,
+        kind: gradeComponentKind({ name: component.name, weight: component.weight }),
       })),
 
     autonomousTasks: extracted.autonomousWork

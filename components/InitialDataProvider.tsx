@@ -16,6 +16,7 @@ import {
 } from "@/app/course-actions";
 import { readSavedCourses, writeSavedCourses } from "@/lib/saved-courses-storage";
 import type { Course, SemesterSettings } from "@/lib/types";
+import { gradeComponentKey } from "@/lib/grades";
 import { getUserStorageKey, USER_STORAGE_KEYS } from "@/lib/user-storage";
 import { useAuthUser } from "./AuthUserProvider";
 
@@ -293,14 +294,36 @@ export default function InitialDataProvider({ children }: { children: ReactNode 
     const result = await upsertBaseCourses(nextCourses);
     if (!result.success) return result;
 
+    const remoteIdByLegacyId = new Map(
+      result.courses.map(({ legacyId, courseId }) => [legacyId, courseId])
+    );
+    const componentIdByIdentity = new Map(
+      result.components.map(({ legacyId, key, componentId }) => [
+        `${legacyId}|${key}`,
+        componentId,
+      ])
+    );
+    const persistedCourses = nextCourses.map((course) => ({
+      ...course,
+      remoteId: remoteIdByLegacyId.get(course.id) ?? course.remoteId,
+      gradeComponents: course.gradeComponents.map((component) => {
+        const key = gradeComponentKey(component);
+        return {
+          ...component,
+          key,
+          id: componentIdByIdentity.get(`${course.id}|${key}`) ?? component.id,
+        };
+      }),
+    }));
+
     setData((current) => {
       const incomingById = new Map(
-        nextCourses.map((course) => [course.id, course])
+        persistedCourses.map((course) => [course.id, course])
       );
       const courses = current.courses
         .map((course) => incomingById.get(course.id) ?? course)
         .concat(
-          nextCourses.filter(
+          persistedCourses.filter(
             (course) =>
               !current.courses.some((currentCourse) => currentCourse.id === course.id)
           )

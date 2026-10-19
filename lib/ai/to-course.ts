@@ -1,4 +1,6 @@
 import type { ExtractedCourse } from "./course-schema";
+import { normalizeClassSessions, scheduledSessionCount } from "../class-sessions";
+import { gradeComponentKey, gradeComponentKind } from "../grades";
 import type {
   Course,
   EvaluationKind,
@@ -42,6 +44,18 @@ function buildAttendanceNote(
 export function extractedCourseToCourse(
   extracted: ExtractedCourse
 ): Course {
+  const classSessions = normalizeClassSessions(
+    extracted.classSessions.map((session) => ({
+      date: session.date,
+      start: session.start ?? undefined,
+      end: session.end ?? undefined,
+      room: session.room ?? undefined,
+      topics: session.topics ?? undefined,
+      status: session.status,
+      note: session.note ?? undefined,
+    }))
+  );
+
   return {
     id: createCourseId(extracted.name),
 
@@ -53,9 +67,9 @@ export function extractedCourseToCourse(
 
     autonomousHours: extracted.autonomousHours ?? 0,
 
-    totalClasses:
-      extracted.attendance.totalClasses ??
-      extracted.classSessions.filter((session) => session.status === "scheduled").length,
+    totalClasses: classSessions.length > 0
+      ? scheduledSessionCount(classSessions)
+      : extracted.attendance.totalClasses ?? 0,
 
     attendanceRequired:
       extracted.attendance.requiredPercentage ?? undefined,
@@ -71,15 +85,7 @@ export function extractedCourseToCourse(
       room: classBlock.room ?? undefined,
     })),
 
-    classSessions: extracted.classSessions.map((session) => ({
-      date: session.date,
-      start: session.start ?? undefined,
-      end: session.end ?? undefined,
-      room: session.room ?? undefined,
-      topics: session.topics ?? undefined,
-      status: session.status,
-      note: session.note ?? undefined,
-    })),
+    classSessions,
 
     evaluations: extracted.evaluations
       .filter(
@@ -106,8 +112,10 @@ export function extractedCourseToCourse(
         } => component.weight !== null
       )
       .map((component) => ({
+        key: gradeComponentKey({ name: component.name, weight: component.weight }),
         name: component.name,
         weight: component.weight,
+        kind: gradeComponentKind({ name: component.name, weight: component.weight }),
       })),
 
     autonomousTasks: extracted.autonomousWork

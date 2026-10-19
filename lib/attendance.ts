@@ -22,6 +22,10 @@ export function attendanceRecordForClassSession(
   session: ClassSession
 ): AttendanceSession | undefined {
   const records = record?.sessions ?? [];
+  if (session.id) {
+    const byId = records.find((item) => item.sessionId === session.id);
+    if (byId) return byId;
+  }
   const exact = records.find(
     (item) => item.date === session.date && item.start === session.start
   );
@@ -59,11 +63,14 @@ export function calculateAttendanceSummary(
   });
 
   const computable = attended + absent;
-  const total =
-    Number.isFinite(course.totalClasses) && course.totalClasses > 0
+  const scheduledTotal = course.classSessions.filter(
+    (session) => session.status === "scheduled"
+  ).length;
+  const total = scheduledTotal > 0
+    ? scheduledTotal
+    : Number.isFinite(course.totalClasses) && course.totalClasses > 0
       ? course.totalClasses
-      : course.classSessions.filter((session) => session.status !== "cancelled")
-          .length || null;
+      : null;
 
   return {
     occurred: occurredSessions.length,
