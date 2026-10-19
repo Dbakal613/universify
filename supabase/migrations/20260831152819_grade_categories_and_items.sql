@@ -84,4 +84,8 @@ with check (
   )
 );
 
+grant select, insert, update, delete
+on table public.grade_components, public.grade_entries
+to authenticated;
+
 commit;
